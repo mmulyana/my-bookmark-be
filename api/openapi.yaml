@@ -1,0 +1,718 @@
+﻿openapi: "3.0.3"
+info:
+  title: My Bookmark API
+  version: "1.0.0"
+  description: API for My Bookmark — personal link organizer
+
+servers:
+  - url: http://localhost:8080
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- Entities ---
+    Bookmark:
+      type: object
+      required: [id, url, title, tagIds, isFavorite, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        favicon:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        tagIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        isFavorite:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Folder:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    Tag:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    FetchMetadataResponse:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        favicon:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+
+    # --- Auth ---
+    RegisterInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+
+    RefreshInput:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    # --- Bookmark Inputs ---
+    CreateBookmarkInput:
+      type: object
+      required: [url, title]
+      properties:
+        url:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        favicon:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        tagIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        isFavorite:
+          type: boolean
+
+    UpdateBookmarkInput:
+      type: object
+      properties:
+        url:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        favicon:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        tagIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        isFavorite:
+          type: boolean
+
+    # --- Folder Inputs ---
+    CreateFolderInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    UpdateFolderInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    # --- Tag Inputs ---
+    CreateTagInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    UpdateTagInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    # --- Metadata Input ---
+    FetchMetadataInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+
+    # --- Error ---
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+paths:
+  # ── Auth ──────────────────────────────────────────────
+  /auth/register:
+    post:
+      operationId: Register
+      summary: Register a new user
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: Login
+      summary: Login
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      operationId: RefreshToken
+      summary: Exchange refresh token for new access token
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Bookmarks ──────────────────────────────────────────
+  /bookmarks:
+    get:
+      operationId: ListBookmarks
+      summary: List all bookmarks for the authenticated user
+      tags: [bookmarks]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: isFavorite
+          in: query
+          required: false
+          description: Filter by favorite status
+          schema:
+            type: boolean
+        - name: hasFolder
+          in: query
+          required: false
+          description: "true = only bookmarks assigned to a folder, false = only bookmarks with no folder"
+          schema:
+            type: boolean
+        - name: hasTags
+          in: query
+          required: false
+          description: "true = only bookmarks with at least one tag, false = only bookmarks with no tags"
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bookmark"
+    post:
+      operationId: CreateBookmark
+      summary: Create a bookmark
+      tags: [bookmarks]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookmarkInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bookmark"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookmarks/{id}:
+    patch:
+      operationId: UpdateBookmark
+      summary: Update a bookmark
+      tags: [bookmarks]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookmarkInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bookmark"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: DeleteBookmark
+      summary: Delete a bookmark
+      tags: [bookmarks]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookmarks/{id}/folder:
+    delete:
+      operationId: RemoveBookmarkFolder
+      summary: Remove a bookmark from its folder (unset folderId to null)
+      tags: [bookmarks]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bookmark"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Folders ───────────────────────────────────────────
+  /folders:
+    get:
+      operationId: ListFolders
+      summary: List all folders for the authenticated user
+      tags: [folders]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Folder"
+    post:
+      operationId: CreateFolder
+      summary: Create a folder
+      tags: [folders]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFolderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /folders/{id}:
+    patch:
+      operationId: UpdateFolder
+      summary: Update a folder
+      tags: [folders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFolderInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: DeleteFolder
+      summary: Delete a folder
+      tags: [folders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Tags ──────────────────────────────────────────────
+  /tags:
+    get:
+      operationId: ListTags
+      summary: List all tags for the authenticated user
+      tags: [tags]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+    post:
+      operationId: CreateTag
+      summary: Create a tag
+      tags: [tags]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tags/{id}:
+    patch:
+      operationId: UpdateTag
+      summary: Update a tag
+      tags: [tags]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTagInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: DeleteTag
+      summary: Delete a tag
+      tags: [tags]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Metadata ──────────────────────────────────────────
+  /fetch-metadata:
+    post:
+      operationId: FetchMetadata
+      summary: Scrape metadata from a URL
+      tags: [metadata]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FetchMetadataInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FetchMetadataResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

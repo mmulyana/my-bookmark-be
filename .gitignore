@@ -1,0 +1,19 @@
+﻿# Binaries
+bin/
+*.exe
+
+# Environment
+.env
+
+# Go tool outputs
+vendor/
+
+# IDE
+.idea/
+.vscode/
+
+# Temp
+tmp/
+
+# OpenAPI specification and generated API definitions
+api/
