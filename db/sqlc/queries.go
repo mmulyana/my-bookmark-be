@@ -202,6 +202,7 @@ WHERE b.user_id = $1
     OR EXISTS (SELECT 1 FROM bookmark_tags bt WHERE bt.bookmark_id = b.id) = $4
   )
 ORDER BY b.created_at DESC
+LIMIT $5 OFFSET $6
 `
 
 type ListBookmarksByUserParams struct {
@@ -209,10 +210,12 @@ type ListBookmarksByUserParams struct {
 	IsFavorite *bool
 	HasFolder  *bool
 	HasTags    *bool
+	PerPage    int
+	Offset     int
 }
 
 func (q *Queries) ListBookmarksByUser(ctx context.Context, arg ListBookmarksByUserParams) ([]Bookmark, error) {
-	rows, err := q.db.Query(ctx, listBookmarksByUser, arg.UserID, arg.IsFavorite, arg.HasFolder, arg.HasTags)
+	rows, err := q.db.Query(ctx, listBookmarksByUser, arg.UserID, arg.IsFavorite, arg.HasFolder, arg.HasTags, arg.PerPage, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

@@ -136,8 +136,13 @@ type ListBookmarksParams struct {
 	// HasFolder true = only bookmarks assigned to a folder, false = only bookmarks with no folder
 	HasFolder *bool `form:"hasFolder,omitempty" json:"hasFolder,omitempty"`
 
-	// HasTags true = only bookmarks with at least one tag, false = only bookmarks with no tags
 	HasTags *bool `form:"hasTags,omitempty" json:"hasTags,omitempty"`
+
+	// Page number, starting at 1
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Number of items per page
+	PerPage *int `form:"per_page,omitempty" json:"per_page,omitempty"`
 }
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
@@ -427,6 +432,18 @@ func (siw *ServerInterfaceWrapper) ListBookmarks(w http.ResponseWriter, r *http.
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hasTags", Err: err})
 		}
+		return
+	}
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "per_page", r.URL.Query(), &params.PerPage, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
 		return
 	}
 

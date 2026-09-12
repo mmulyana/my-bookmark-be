@@ -7,7 +7,8 @@ WHERE b.user_id = sqlc.arg(user_id)
     sqlc.narg(has_tags)::bool IS NULL
     OR EXISTS (SELECT 1 FROM bookmark_tags bt WHERE bt.bookmark_id = b.id) = sqlc.narg(has_tags)
   )
-ORDER BY b.created_at DESC;
+ORDER BY b.created_at DESC
+LIMIT sqlc.arg(per_page) OFFSET sqlc.arg(offset);
 
 -- name: CreateBookmark :one
 INSERT INTO bookmarks (user_id, url, title, description, favicon, image_url, folder_id, is_favorite)
