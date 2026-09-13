@@ -1,4 +1,4 @@
-﻿package dbsqlc
+package dbsqlc
 
 import (
 	"context"
@@ -201,8 +201,16 @@ WHERE b.user_id = $1
     $4::bool IS NULL
     OR EXISTS (SELECT 1 FROM bookmark_tags bt WHERE bt.bookmark_id = b.id) = $4
   )
-ORDER BY b.created_at DESC
-LIMIT $5 OFFSET $6
+  AND (
+    $5::uuid IS NULL
+    OR (b.created_at, b.id) < (
+      SELECT cursor.created_at, cursor.id
+      FROM bookmarks cursor
+      WHERE cursor.id = $5 AND cursor.user_id = $1
+    )
+  )
+ORDER BY b.created_at DESC, b.id DESC
+LIMIT $6
 `
 
 type ListBookmarksByUserParams struct {
@@ -210,12 +218,12 @@ type ListBookmarksByUserParams struct {
 	IsFavorite *bool
 	HasFolder  *bool
 	HasTags    *bool
+	LastID     *uuid.UUID
 	PerPage    int
-	Offset     int
 }
 
 func (q *Queries) ListBookmarksByUser(ctx context.Context, arg ListBookmarksByUserParams) ([]Bookmark, error) {
-	rows, err := q.db.Query(ctx, listBookmarksByUser, arg.UserID, arg.IsFavorite, arg.HasFolder, arg.HasTags, arg.PerPage, arg.Offset)
+	rows, err := q.db.Query(ctx, listBookmarksByUser, arg.UserID, arg.IsFavorite, arg.HasFolder, arg.HasTags, arg.LastID, arg.PerPage)
 	if err != nil {
 		return nil, err
 	}

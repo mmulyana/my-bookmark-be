@@ -138,8 +138,8 @@ type ListBookmarksParams struct {
 
 	HasTags *bool `form:"hasTags,omitempty" json:"hasTags,omitempty"`
 
-	// Page number, starting at 1
-	Page *int `form:"page,omitempty" json:"page,omitempty"`
+	// ID of the last bookmark from the previous batch
+	LastID *openapi_types.UUID `form:"last_id,omitempty" json:"last_id,omitempty"`
 
 	// Number of items per page
 	PerPage *int `form:"per_page,omitempty" json:"per_page,omitempty"`
@@ -435,9 +435,9 @@ func (siw *ServerInterfaceWrapper) ListBookmarks(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "last_id", r.URL.Query(), &params.LastID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "last_id", Err: err})
 		return
 	}
 

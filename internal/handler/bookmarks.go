@@ -40,15 +40,9 @@ func toAPIBookmark(b dbsqlc.Bookmark, tagIDs []uuid.UUID) api.Bookmark {
 
 func (h *BookmarkHandler) ListBookmarks(ctx context.Context, request api.ListBookmarksRequestObject) (api.ListBookmarksResponseObject, error) {
 	userID := middleware.GetUserID(ctx)
-	page, perPage := 1, 20
-	if request.Params.Page != nil {
-		page = *request.Params.Page
-	}
+	perPage := 20
 	if request.Params.PerPage != nil {
 		perPage = *request.Params.PerPage
-	}
-	if page < 1 {
-		page = 1
 	}
 	if perPage < 1 {
 		perPage = 20
@@ -62,8 +56,8 @@ func (h *BookmarkHandler) ListBookmarks(ctx context.Context, request api.ListBoo
 		IsFavorite: request.Params.IsFavorite,
 		HasFolder:  request.Params.HasFolder,
 		HasTags:    request.Params.HasTags,
+		LastID:     request.Params.LastID,
 		PerPage:    perPage,
-		Offset:     (page - 1) * perPage,
 	})
 	if err != nil {
 		return nil, err
