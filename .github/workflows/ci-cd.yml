@@ -35,7 +35,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/my-bookmark-be:latest
 
       - name: Deploy
