@@ -20,19 +20,23 @@ func NewMetadataHandler() *MetadataHandler {
 }
 
 var (
-	reTitle        = regexp.MustCompile(`(?i)<title[^>]*>(.*?)</title>`)
-	reMetaDesc     = regexp.MustCompile(`(?i)<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']`)
-	reMetaDescAlt  = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']`)
-	reOGTitle      = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']`)
-	reOGTitleAlt   = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["']`)
-	reOGDesc       = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']`)
-	reOGDescAlt    = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:description["']`)
-	reOGImage      = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']*)["']`)
-	reOGImageAlt   = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:image["']`)
-	reAppleIcon    = regexp.MustCompile(`(?i)<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']*)["']`)
-	reAppleIconAlt = regexp.MustCompile(`(?i)<link[^>]+href=["']([^"']*)["'][^>]+rel=["']apple-touch-icon["']`)
-	reIcon         = regexp.MustCompile(`(?i)<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']*)["']`)
-	reIconAlt      = regexp.MustCompile(`(?i)<link[^>]+href=["']([^"']*)["'][^>]+rel=["'](?:shortcut )?icon["']`)
+	reTitle           = regexp.MustCompile(`(?i)<title[^>]*>(.*?)</title>`)
+	reMetaDesc        = regexp.MustCompile(`(?i)<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']`)
+	reMetaDescAlt     = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']`)
+	reOGTitle         = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']`)
+	reOGTitleAlt      = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["']`)
+	reOGDesc          = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']`)
+	reOGDescAlt       = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:description["']`)
+	reOGImage         = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']*)["']`)
+	reOGImageAlt      = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:image["']`)
+	reTwitterImage    = regexp.MustCompile(`(?i)<meta[^>]+(?:name|property)=["']twitter:image(?::src)?["'][^>]+content=["']([^"']*)["']`)
+	reTwitterImageAlt = regexp.MustCompile(`(?i)<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["']twitter:image(?::src)?["']`)
+	reImageSrc        = regexp.MustCompile(`(?i)<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']*)["']`)
+	reImgTag          = regexp.MustCompile(`(?i)<img[^>]+src=["']([^"']+)["']`)
+	reAppleIcon       = regexp.MustCompile(`(?i)<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']*)["']`)
+	reAppleIconAlt    = regexp.MustCompile(`(?i)<link[^>]+href=["']([^"']*)["'][^>]+rel=["']apple-touch-icon["']`)
+	reIcon            = regexp.MustCompile(`(?i)<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']*)["']`)
+	reIconAlt         = regexp.MustCompile(`(?i)<link[^>]+href=["']([^"']*)["'][^>]+rel=["'](?:shortcut )?icon["']`)
 )
 
 func matchFirst(body string, re1, re2 *regexp.Regexp) string {
@@ -63,6 +67,21 @@ func resolveURL(base, href string) string {
 		return href
 	}
 	return u.ResolveReference(ref).String()
+}
+
+// firstContentImage dipakai sebagai cadangan terakhir saat halaman tidak punya meta gambar.
+// Data URI, SVG, dan gambar pelacak dilewati karena tidak layak jadi cover.
+func firstContentImage(body string) string {
+	for _, m := range reImgTag.FindAllStringSubmatch(body, 20) {
+		src := strings.TrimSpace(m[1])
+		lower := strings.ToLower(src)
+		if strings.HasPrefix(lower, "data:") || strings.Contains(lower, ".svg") ||
+			strings.Contains(lower, "pixel") || strings.Contains(lower, "tracking") {
+			continue
+		}
+		return src
+	}
+	return ""
 }
 
 func strPtr(s string) *string {
@@ -111,6 +130,15 @@ func (h *MetadataHandler) FetchMetadata(ctx context.Context, request api.FetchMe
 	}
 
 	imageURL := matchFirst(body, reOGImage, reOGImageAlt)
+	if imageURL == "" {
+		imageURL = matchFirst(body, reTwitterImage, reTwitterImageAlt)
+	}
+	if imageURL == "" {
+		imageURL = matchFirst(body, reImageSrc, nil)
+	}
+	if imageURL == "" {
+		imageURL = firstContentImage(body)
+	}
 	if imageURL != "" {
 		imageURL = resolveURL(targetURL, imageURL)
 	}
