@@ -11,6 +11,7 @@ import (
 	"github.com/mmuly/my-bookmark-be/internal/auth"
 	"github.com/mmuly/my-bookmark-be/internal/handler"
 	"github.com/mmuly/my-bookmark-be/internal/middleware"
+	"github.com/mmuly/my-bookmark-be/internal/storage"
 	"github.com/rs/cors"
 )
 
@@ -22,7 +23,7 @@ func jsonErrorHandler(status int) func(w http.ResponseWriter, r *http.Request, e
 	}
 }
 
-func New(db *pgxpool.Pool, authSvc *auth.Service) http.Handler {
+func New(db *pgxpool.Pool, authSvc *auth.Service, store storage.Storage, maxImageBytes int64, urlSecret string) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.Logger)
@@ -37,7 +38,7 @@ func New(db *pgxpool.Pool, authSvc *auth.Service) http.Handler {
 	})
 	r.Use(c.Handler)
 
-	ssi := handler.NewServer(db, authSvc)
+	ssi := handler.NewServer(db, authSvc, store, maxImageBytes, urlSecret)
 	strict := api.NewStrictHandlerWithOptions(ssi, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  jsonErrorHandler(http.StatusBadRequest),
 		ResponseErrorHandlerFunc: jsonErrorHandler(http.StatusInternalServerError),
@@ -47,6 +48,8 @@ func New(db *pgxpool.Pool, authSvc *auth.Service) http.Handler {
 	r.Post("/auth/register", wrapper.Register)
 	r.Post("/auth/login", wrapper.Login)
 	r.Post("/auth/refresh", wrapper.RefreshToken)
+
+	r.Get("/images/{id}/file", ssi.ServeImageFile)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authSvc))
@@ -66,6 +69,11 @@ func New(db *pgxpool.Pool, authSvc *auth.Service) http.Handler {
 		r.Post("/tags", wrapper.CreateTag)
 		r.Patch("/tags/{id}", wrapper.UpdateTag)
 		r.Delete("/tags/{id}", wrapper.DeleteTag)
+
+		r.Get("/images", wrapper.ListImages)
+		r.Post("/images", ssi.UploadImages)
+		r.Patch("/images/{id}", wrapper.UpdateImage)
+		r.Delete("/images/{id}", wrapper.DeleteImage)
 
 		r.Post("/fetch-metadata", wrapper.FetchMetadata)
 	})

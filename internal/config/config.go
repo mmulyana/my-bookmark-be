@@ -1,17 +1,21 @@
-﻿package config
+package config
 
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
 type Config struct {
-	DatabaseURL     string
-	JWTSecret       string
-	JWTAccessTTL    time.Duration
-	JWTRefreshTTL   time.Duration
-	Port            string
+	DatabaseURL   string
+	JWTSecret     string
+	JWTAccessTTL  time.Duration
+	JWTRefreshTTL time.Duration
+	Port          string
+	StorageDriver string
+	StorageDir    string
+	MaxImageBytes int64
 }
 
 func Load() (*Config, error) {
@@ -40,12 +44,32 @@ func Load() (*Config, error) {
 		port = "8080"
 	}
 
+	storageDriver := os.Getenv("STORAGE_DRIVER")
+	if storageDriver == "" {
+		storageDriver = "local"
+	}
+	storageDir := os.Getenv("STORAGE_DIR")
+	if storageDir == "" {
+		storageDir = "./data/uploads"
+	}
+	maxImageBytes := int64(10 << 20)
+	if v := os.Getenv("MAX_IMAGE_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("MAX_IMAGE_BYTES must be a positive integer")
+		}
+		maxImageBytes = n
+	}
+
 	return &Config{
 		DatabaseURL:   dbURL,
 		JWTSecret:     jwtSecret,
 		JWTAccessTTL:  accessTTL,
 		JWTRefreshTTL: refreshTTL,
 		Port:          port,
+		StorageDriver: storageDriver,
+		StorageDir:    storageDir,
+		MaxImageBytes: maxImageBytes,
 	}, nil
 }
 

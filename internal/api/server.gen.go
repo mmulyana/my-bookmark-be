@@ -83,6 +83,21 @@ type Folder struct {
 	Name string             `json:"name"`
 }
 
+// Image defines model for Image.
+type Image struct {
+	CreatedAt time.Time            `json:"createdAt"`
+	Height    *int                 `json:"height,omitempty"`
+	Id        openapi_types.UUID   `json:"id"`
+	MimeType  string               `json:"mimeType"`
+	Name      string               `json:"name"`
+	SizeBytes int64                `json:"sizeBytes"`
+	TagIds    []openapi_types.UUID `json:"tagIds"`
+
+	// Url Signed, short-lived path to the file (relative to the API base URL); usable directly as <img src>
+	Url   string `json:"url"`
+	Width *int   `json:"width,omitempty"`
+}
+
 // LoginInput defines model for LoginInput.
 type LoginInput struct {
 	Email    openapi_types.Email `json:"email"`
@@ -123,6 +138,12 @@ type UpdateFolderInput struct {
 	Name string `json:"name"`
 }
 
+// UpdateImageInput defines model for UpdateImageInput.
+type UpdateImageInput struct {
+	Name   *string               `json:"name,omitempty"`
+	TagIds *[]openapi_types.UUID `json:"tagIds,omitempty"`
+}
+
 // UpdateTagInput defines model for UpdateTagInput.
 type UpdateTagInput struct {
 	Name string `json:"name"`
@@ -136,12 +157,28 @@ type ListBookmarksParams struct {
 	// HasFolder true = only bookmarks assigned to a folder, false = only bookmarks with no folder
 	HasFolder *bool `form:"hasFolder,omitempty" json:"hasFolder,omitempty"`
 
+	// HasTags true = only bookmarks with at least one tag, false = only bookmarks with no tags
 	HasTags *bool `form:"hasTags,omitempty" json:"hasTags,omitempty"`
 
-	// ID of the last bookmark from the previous batch
-	LastID *openapi_types.UUID `form:"last_id,omitempty" json:"last_id,omitempty"`
+	// LastId ID of the last bookmark from the previous batch
+	LastId *openapi_types.UUID `form:"last_id,omitempty" json:"last_id,omitempty"`
 
-	// Number of items per page
+	// PerPage Number of bookmarks per batch (maximum 100)
+	PerPage *int `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// ListImagesParams defines parameters for ListImages.
+type ListImagesParams struct {
+	// TagIds Comma-separated tag IDs; only images having all of them are returned
+	TagIds *[]openapi_types.UUID `form:"tagIds,omitempty" json:"tagIds,omitempty"`
+
+	// HasTags true = only tagged images, false = only untagged images
+	HasTags *bool `form:"hasTags,omitempty" json:"hasTags,omitempty"`
+
+	// LastId ID of the last image from the previous batch
+	LastId *openapi_types.UUID `form:"last_id,omitempty" json:"last_id,omitempty"`
+
+	// PerPage Number of images per batch (maximum 100)
 	PerPage *int `form:"per_page,omitempty" json:"per_page,omitempty"`
 }
 
@@ -168,6 +205,9 @@ type CreateFolderJSONRequestBody = CreateFolderInput
 
 // UpdateFolderJSONRequestBody defines body for UpdateFolder for application/json ContentType.
 type UpdateFolderJSONRequestBody = UpdateFolderInput
+
+// UpdateImageJSONRequestBody defines body for UpdateImage for application/json ContentType.
+type UpdateImageJSONRequestBody = UpdateImageInput
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagInput
@@ -216,6 +256,15 @@ type ServerInterface interface {
 	// UpdateFolder Update a folder
 	// (PATCH /folders/{id})
 	UpdateFolder(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListImages List images for the authenticated user
+	// (GET /images)
+	ListImages(w http.ResponseWriter, r *http.Request, params ListImagesParams)
+	// DeleteImage Delete an image and its file
+	// (DELETE /images/{id})
+	DeleteImage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// UpdateImage Rename an image and/or replace its tags
+	// (PATCH /images/{id})
+	UpdateImage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListTags List all tags for the authenticated user
 	// (GET /tags)
 	ListTags(w http.ResponseWriter, r *http.Request)
@@ -309,6 +358,24 @@ func (_ Unimplemented) DeleteFolder(w http.ResponseWriter, r *http.Request, id o
 // UpdateFolder Update a folder
 // (PATCH /folders/{id})
 func (_ Unimplemented) UpdateFolder(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListImages List images for the authenticated user
+// (GET /images)
+func (_ Unimplemented) ListImages(w http.ResponseWriter, r *http.Request, params ListImagesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteImage Delete an image and its file
+// (DELETE /images/{id})
+func (_ Unimplemented) DeleteImage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateImage Rename an image and/or replace its tags
+// (PATCH /images/{id})
+func (_ Unimplemented) UpdateImage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -435,15 +502,29 @@ func (siw *ServerInterfaceWrapper) ListBookmarks(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "last_id", r.URL.Query(), &params.LastID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	// ------------- Optional query parameter "last_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "last_id", r.URL.Query(), &params.LastId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "last_id", Err: err})
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "last_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "last_id", Err: err})
+		}
 		return
 	}
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "per_page", r.URL.Query(), &params.PerPage, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	// ------------- Optional query parameter "per_page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "per_page", r.URL.Query(), &params.PerPage, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "per_page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		}
 		return
 	}
 
@@ -635,6 +716,130 @@ func (siw *ServerInterfaceWrapper) UpdateFolder(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateFolder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImages operation middleware
+func (siw *ServerInterfaceWrapper) ListImages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListImagesParams
+
+	// ------------- Optional query parameter "tagIds" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", false, false, "tagIds", r.URL.Query(), &params.TagIds, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tagIds"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tagIds", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "hasTags" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hasTags", r.URL.Query(), &params.HasTags, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "hasTags"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hasTags", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "last_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "last_id", r.URL.Query(), &params.LastId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "last_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "last_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "per_page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "per_page", r.URL.Query(), &params.PerPage, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "per_page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "per_page", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImages(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteImage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteImage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateImage operation middleware
+func (siw *ServerInterfaceWrapper) UpdateImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateImage(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -884,6 +1089,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/tags/{id}", wrapper.UpdateTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/images", wrapper.ListImages)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/images/{id}", wrapper.DeleteImage)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/images/{id}", wrapper.UpdateImage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/fetch-metadata", wrapper.FetchMetadata)
@@ -1365,6 +1579,117 @@ func (response UpdateFolder404JSONResponse) VisitUpdateFolderResponse(w http.Res
 	return err
 }
 
+type ListImagesRequestObject struct {
+	Params ListImagesParams
+}
+
+type ListImagesResponseObject interface {
+	VisitListImagesResponse(w http.ResponseWriter) error
+}
+
+type ListImages200JSONResponse []Image
+
+func (response ListImages200JSONResponse) VisitListImagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteImageRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteImageResponseObject interface {
+	VisitDeleteImageResponse(w http.ResponseWriter) error
+}
+
+type DeleteImage200JSONResponse struct {
+	Success *bool `json:"success,omitempty"`
+}
+
+func (response DeleteImage200JSONResponse) VisitDeleteImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteImage404JSONResponse ErrorResponse
+
+func (response DeleteImage404JSONResponse) VisitDeleteImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateImageRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *UpdateImageJSONRequestBody
+}
+
+type UpdateImageResponseObject interface {
+	VisitUpdateImageResponse(w http.ResponseWriter) error
+}
+
+type UpdateImage200JSONResponse Image
+
+func (response UpdateImage200JSONResponse) VisitUpdateImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateImage400JSONResponse ErrorResponse
+
+func (response UpdateImage400JSONResponse) VisitUpdateImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateImage404JSONResponse ErrorResponse
+
+func (response UpdateImage404JSONResponse) VisitUpdateImageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTagsRequestObject struct {
 }
 
@@ -1552,6 +1877,15 @@ type StrictServerInterface interface {
 	// UpdateFolder Update a folder
 	// (PATCH /folders/{id})
 	UpdateFolder(ctx context.Context, request UpdateFolderRequestObject) (UpdateFolderResponseObject, error)
+	// ListImages List images for the authenticated user
+	// (GET /images)
+	ListImages(ctx context.Context, request ListImagesRequestObject) (ListImagesResponseObject, error)
+	// DeleteImage Delete an image and its file
+	// (DELETE /images/{id})
+	DeleteImage(ctx context.Context, request DeleteImageRequestObject) (DeleteImageResponseObject, error)
+	// UpdateImage Rename an image and/or replace its tags
+	// (PATCH /images/{id})
+	UpdateImage(ctx context.Context, request UpdateImageRequestObject) (UpdateImageResponseObject, error)
 	// ListTags List all tags for the authenticated user
 	// (GET /tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
@@ -1978,6 +2312,91 @@ func (sh *strictHandler) UpdateFolder(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateFolderResponseObject); ok {
 		if err := validResponse.VisitUpdateFolderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListImages operation middleware
+func (sh *strictHandler) ListImages(w http.ResponseWriter, r *http.Request, params ListImagesParams) {
+	var request ListImagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListImages(ctx, request.(ListImagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListImages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListImagesResponseObject); ok {
+		if err := validResponse.VisitListImagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteImage operation middleware
+func (sh *strictHandler) DeleteImage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteImageRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteImage(ctx, request.(DeleteImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteImageResponseObject); ok {
+		if err := validResponse.VisitDeleteImageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateImage operation middleware
+func (sh *strictHandler) UpdateImage(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request UpdateImageRequestObject
+
+	request.Id = id
+
+	var body UpdateImageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateImage(ctx, request.(UpdateImageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateImage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateImageResponseObject); ok {
+		if err := validResponse.VisitUpdateImageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

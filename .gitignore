@@ -17,3 +17,6 @@ tmp/
 
 # OpenAPI specification and generated API definitions
 api/
+
+# Uploaded files
+data/
