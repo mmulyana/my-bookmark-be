@@ -56,7 +56,7 @@ func (h *BookmarkHandler) ListBookmarks(ctx context.Context, request api.ListBoo
 		IsFavorite: request.Params.IsFavorite,
 		HasFolder:  request.Params.HasFolder,
 		HasTags:    request.Params.HasTags,
-		LastID:     request.Params.LastID,
+		LastID:     request.Params.LastId,
 		PerPage:    perPage,
 	})
 	if err != nil {

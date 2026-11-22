@@ -221,6 +221,50 @@ components:
         url:
           type: string
 
+    # --- Images ---
+    Image:
+      type: object
+      required: [id, name, url, mimeType, sizeBytes, tagIds, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        url:
+          type: string
+          description: "Signed, short-lived path to the file (relative to the API base URL); usable directly as <img src>"
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        tagIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateImageInput:
+      type: object
+      properties:
+        name:
+          type: string
+        tagIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
     # --- Error ---
     ErrorResponse:
       type: object
@@ -679,6 +723,127 @@ paths:
       operationId: DeleteTag
       summary: Delete a tag
       tags: [tags]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Images ────────────────────────────────────────────
+  /images:
+    get:
+      operationId: ListImages
+      summary: List images for the authenticated user
+      tags: [images]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tagIds
+          in: query
+          required: false
+          description: "Comma-separated tag IDs; only images having all of them are returned"
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+        - name: hasTags
+          in: query
+          required: false
+          description: "true = only tagged images, false = only untagged images"
+          schema:
+            type: boolean
+        - name: last_id
+          in: query
+          required: false
+          description: ID of the last image from the previous batch
+          schema:
+            type: string
+            format: uuid
+        - name: per_page
+          in: query
+          required: false
+          description: Number of images per batch (maximum 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 40
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Image"
+
+  /images/{id}:
+    patch:
+      operationId: UpdateImage
+      summary: Rename an image and/or replace its tags
+      tags: [images]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateImageInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Image"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: DeleteImage
+      summary: Delete an image and its file
+      tags: [images]
       security:
         - BearerAuth: []
       parameters:

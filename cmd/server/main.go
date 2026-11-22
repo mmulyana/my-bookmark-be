@@ -15,6 +15,7 @@ import (
 	"github.com/mmuly/my-bookmark-be/internal/config"
 	"github.com/mmuly/my-bookmark-be/internal/db"
 	"github.com/mmuly/my-bookmark-be/internal/router"
+	"github.com/mmuly/my-bookmark-be/internal/storage"
 )
 
 func main() {
@@ -47,7 +48,18 @@ func main() {
 
 	authSvc := auth.NewService(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 
-	r := router.New(pool, authSvc)
+	var store storage.Storage
+	switch cfg.StorageDriver {
+	case "local":
+		store, err = storage.NewLocal(cfg.StorageDir)
+		if err != nil {
+			log.Fatalf("Storage init failed: %v", err)
+		}
+	default:
+		log.Fatalf("Unknown STORAGE_DRIVER %q (supported: local)", cfg.StorageDriver)
+	}
+
+	r := router.New(pool, authSvc, store, cfg.MaxImageBytes, cfg.JWTSecret)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("Server listening on %s", addr)
