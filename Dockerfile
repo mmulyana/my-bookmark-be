@@ -17,6 +17,9 @@ WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata
 
+ENV STORAGE_DIR=/app/data/uploads
+RUN mkdir -p ${STORAGE_DIR}
+
 COPY --from=builder /app/bin/server ./server
 COPY --from=builder /app/db/migrations ./db/migrations
 
